@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "modelsig"
+version = "2.0.0"
+description = "Compare LLM architectures without downloading weights — structural fingerprint & proxy-test advisor"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.9"
+authors = [
+    { name = "modelsig contributors" },
+]
+keywords = [
+    "llm", "huggingface", "model-analysis", "safetensors", "onnx",
+    "architecture", "fingerprint", "proxy-testing", "vllm", "inference",
+    "qwen", "llama", "mistral", "moe", "gqa",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Testing",
+]
+dependencies = [
+    "requests>=2.28.0",
+    "huggingface_hub>=0.20.0",
+]
+
+[project.optional-dependencies]
+onnx = ["onnx>=1.14.0"]
+transformers = ["transformers>=4.40.0"]
+torch = ["torch>=2.1.0", "transformers>=4.40.0"]
+full = [
+    "onnx>=1.14.0",
+    "transformers>=4.40.0",
+    "torch>=2.1.0",
+    "safetensors>=0.4.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+]
+
+[project.scripts]
+modelsig = "modelsig.analyze:main"
+
+[project.urls]
+Homepage = "https://github.com/joe0731/modelsig"
+Repository = "https://github.com/joe0731/modelsig"
+"Bug Tracker" = "https://github.com/joe0731/modelsig/issues"
+
+[tool.setuptools.packages.find]
+include = ["modelsig*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

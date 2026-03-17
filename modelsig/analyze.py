@@ -40,22 +40,21 @@ from .output.markdown_fmt import format_markdown
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="analyze.py",
+        prog="modelsig",
         description=(
-            "modelsig: comprehensive model signature analyzer.\n"
-            "Combines chagpt · gemini · grok · kimi · minimax approaches.\n"
+            "modelsig: compare LLM architectures without downloading weights.\n"
             "Zero weight download — uses HTTP Range for safetensors headers only."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python analyze.py Qwen/Qwen3-7B Qwen/Qwen3-72B --compare --output table
-  python analyze.py Qwen/Qwen3-7B Qwen/Qwen3-30B-A3B Qwen/Qwen3-235B-A22B \\
+  modelsig Qwen/Qwen3-7B Qwen/Qwen3-72B --compare --output table
+  modelsig Qwen/Qwen3-7B Qwen/Qwen3-30B-A3B Qwen/Qwen3-235B-A22B \\
       --compare --multi-fidelity --output markdown --save report.md
-  python analyze.py local:/models/7b local:/models/72b --compare
-  python analyze.py Qwen/Qwen3-7B --quant-path --output json
-  python analyze.py Qwen/Qwen3-235B-A22B --fast --output table
-  python analyze.py Qwen/Qwen3-7B --no-fx-trace --no-hook-capture --output json
+  modelsig local:/models/7b local:/models/72b --compare
+  modelsig Qwen/Qwen3-7B --quant-path --output json
+  modelsig Qwen/Qwen3-235B-A22B --fast --output table
+  modelsig Qwen/Qwen3-7B --no-fx-trace --no-hook-capture --output json
 """,
     )
     p.add_argument("model_ids", nargs="*", metavar="MODEL_ID",
@@ -84,6 +83,9 @@ Examples:
     p.add_argument("--token", metavar="TOKEN", default=None,
                    help="HuggingFace Hub token (overrides HF_TOKEN env var)")
     p.add_argument("--no-color", action="store_true", dest="no_color")
+    p.add_argument("--trust-remote-code", action="store_true", dest="trust_remote_code",
+                   help="Pass trust_remote_code=True to AutoConfig/AutoModel (use only for "
+                        "verified models — enables arbitrary code execution)")
     return p
 
 
@@ -125,6 +127,7 @@ def main() -> int:
                 quant_path=args.quant_path,
                 fast=args.fast,
                 timeout=args.timeout,
+                trust_remote_code=args.trust_remote_code,
             )
         except Exception as exc:
             print(f"ERROR analyzing {mid}: {exc}", file=sys.stderr)

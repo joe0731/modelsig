@@ -1,22 +1,102 @@
 # modelsig
 
-**Model Signature Analyzer** — compare LLM architectures without downloading weights.
+**Compare LLM architectures without downloading weights.**
 
-`modelsig` extracts a multi-layer structural fingerprint from any HuggingFace model and
-tells you whether two models are architecturally isomorphic — meaning the smaller one
-is a valid proxy for testing the larger one.
+`modelsig` extracts a multi-layer structural fingerprint from any HuggingFace model and tells you whether two models are architecturally equivalent — so the smaller one can act as a valid proxy for testing the larger one.
+
+[![Weekly Validation](https://github.com/joe0731/modelsig/actions/workflows/weekly-validation.yml/badge.svg)](https://github.com/joe0731/modelsig/actions/workflows/weekly-validation.yml)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
 ---
 
-## Why modelsig?
+## What problem does it solve?
 
-Testing inference engines (vLLM, TensorRT-LLM, SGLang, etc.) against every large model
-is prohibitively expensive. `modelsig` answers:
+Testing inference engines (vLLM, TensorRT-LLM, SGLang, llama.cpp, ONNX Runtime, etc.) against every large model is prohibitively expensive. `modelsig` answers:
 
-> *"Can I test correctness of Qwen3-72B using Qwen3-7B instead?"*
+> *"Can I test Qwen3-72B correctness using Qwen3-7B instead?"*
+> *"Is Nemotron-120B-FP4 architecturally equivalent to the BF16 variant?"*
+> *"Does this ONNX export match the original safetensors model?"*
 
-It does this by comparing structural fingerprints — shape ratios, operator sets, KV cache
-patterns, and layer topology — without ever downloading a single weight tensor.
+It compares structural fingerprints — shape ratios, operator sets, KV cache patterns, layer topology — without ever downloading a single weight tensor.
+
+---
+
+## Key Features
+
+- **Zero weight download** — safetensors header via HTTP Range (~20 bytes), ONNX graph-only (no `.onnx_data`), or config-only fast mode
+- **5-layer fingerprint** — static weights, arch config, op types, KV cache pattern, optional hook shapes
+- **3-phase isomorphism comparison** — key overlap, substructure, algebraic scaling
+- **Substitution verdicts** — `FULL_SUBSTITUTE / PARTIAL_SUBSTITUTE / NO_SUBSTITUTE`
+- **4-level multi-fidelity test plan** — maps models to test coverage levels L1–L4
+- **Wide model support** — dense decoder, GQA, MoE, vision-language, speech, ONNX classification
+- **Both HF and local models** — supports `local:/path/to/model`
+- **JSON / table / markdown output** — CI-friendly JSON, human-readable table, shareable markdown
+
+---
+
+## Installation
+
+### From PyPI (recommended)
+
+```bash
+pip install modelsig
+```
+
+### From source
+
+```bash
+git clone https://github.com/joe0731/modelsig
+cd modelsig
+pip install -e .
+```
+
+### Minimal (no optional deps)
+
+```bash
+pip install modelsig
+# Works for all safetensors + config-only fast mode
+```
+
+### Full (all parsers enabled)
+
+```bash
+pip install "modelsig[full]"
+# Adds: onnx, transformers, torch, safetensors
+```
+
+**Dependency breakdown:**
+
+| Package | Required | Purpose |
+|---------|----------|---------|
+| `requests` | ✅ | HTTP Range fetching for safetensors headers |
+| `huggingface_hub` | ✅ | Model file listing, downloads, auth |
+| `onnx` | optional | ONNX graph parsing (falls back to built-in protobuf) |
+| `transformers` | optional | AutoConfig normalization, FX trace, hook capture |
+| `torch` | optional | FX symbolic trace and forward-hook shape capture |
+| `safetensors` | optional | Local safetensors file parsing |
+
+---
+
+## Quick Start
+
+```bash
+# Analyze a single model
+modelsig Qwen/Qwen3-7B --output table
+
+# Compare two models (proxy-test decision)
+modelsig Qwen/Qwen3-7B Qwen/Qwen3-72B --compare --output table
+
+# Fast mode for large models (config only, no download)
+modelsig nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 --fast --output table
+
+# ONNX model
+modelsig onnx-community/Qwen3.5-0.8B-ONNX --output json
+
+# Private/gated model
+modelsig org/private-model --token hf_xxx
+# or: export HF_TOKEN=hf_xxx
+```
 
 ---
 
@@ -24,11 +104,11 @@ patterns, and layer topology — without ever downloading a single weight tensor
 
 ### Zero-Weight-Download
 
-For **safetensors** models, only the file header is fetched via HTTP Range requests
-(2 × ~20 bytes). No weights are transferred.
+For **safetensors** models, only the file header is fetched via HTTP Range requests (~20 bytes per shard). No weights are transferred.
 
-For **ONNX** models, only the `.onnx` graph file is downloaded (typically < 5 MB).
-The paired `.onnx_data` weight file (which can be GBs) is never touched.
+For **ONNX** models, only the `.onnx` graph file is downloaded (typically 1–5 MB). The paired `.onnx_data` weight file (which can be GBs) is never touched.
+
+For **fast mode** (`--fast`), only `config.json` is fetched (a few KB). No tensors at all.
 
 ### 5-Layer Signature System
 
@@ -69,32 +149,12 @@ L4 Canary       — large/MoE model: peak memory, TP/PP correctness
 
 ---
 
-## Installation
-
-```bash
-pip install huggingface_hub onnx requests transformers
-# clone and use directly (no package install needed)
-git clone https://github.com/joe0731/modelsig
-cd modelsig
-```
-
-**Required:**
-- `huggingface_hub` — model file listing, downloads, auth
-- `requests` — HTTP Range fetching
-
-**Optional (richer analysis):**
-- `onnx` — ONNX graph parsing (falls back to built-in protobuf parser)
-- `transformers` — AutoConfig canonical config normalization + FX trace + hook capture
-- `torch` — FX symbolic trace and forward hook capture
-
----
-
 ## Usage
 
 ### Basic — analyze a single model
 
 ```bash
-python -m modelsig.analyze Qwen/Qwen3-7B --output table
+modelsig Qwen/Qwen3-7B --output table
 ```
 
 ```
@@ -122,13 +182,13 @@ python -m modelsig.analyze Qwen/Qwen3-7B --output table
 ### Compare models (proxy-testing decision)
 
 ```bash
-python -m modelsig.analyze Qwen/Qwen3-7B Qwen/Qwen3-72B --compare --output table
+modelsig Qwen/Qwen3-7B Qwen/Qwen3-72B --compare --output table
 ```
 
 ### Full analysis with multi-fidelity plan
 
 ```bash
-python -m modelsig.analyze \
+modelsig \
     Qwen/Qwen3-7B Qwen/Qwen3-30B-A3B Qwen/Qwen3-235B-A22B \
     --compare --multi-fidelity --output markdown --save report.md
 ```
@@ -136,34 +196,42 @@ python -m modelsig.analyze \
 ### ONNX model
 
 ```bash
-python -m modelsig.analyze onnx-community/Qwen3-4B-ONNX --output json
+modelsig onnx-community/Qwen3-4B-ONNX --output json
 ```
 
 ### Config-only fast mode (no safetensors/ONNX fetch, instantaneous)
 
 ```bash
-python -m modelsig.analyze Qwen/Qwen3-235B-A22B --fast --output table
+modelsig Qwen/Qwen3-235B-A22B --fast --output table
 ```
 
 ### Local model directory
 
 ```bash
-python -m modelsig.analyze local:/path/to/model --output json
-python -m modelsig.analyze local:/path/to/7b local:/path/to/72b --compare
+modelsig local:/path/to/model --output json
+modelsig local:/path/to/7b local:/path/to/72b --compare
 ```
 
 ### Private / gated models
 
 ```bash
-python -m modelsig.analyze org/private-model --token hf_xxx
+modelsig org/private-model --token hf_xxx
 # or: export HF_TOKEN=hf_xxx
 ```
 
 ### Save report
 
 ```bash
-python -m modelsig.analyze Qwen/Qwen3-7B Qwen/Qwen3-72B \
+modelsig Qwen/Qwen3-7B Qwen/Qwen3-72B \
     --compare --output markdown --save report.md
+```
+
+### Models with custom code
+
+```bash
+# Only use --trust-remote-code for models you trust.
+# This allows execution of arbitrary Python code from the model repository.
+modelsig org/custom-model --trust-remote-code --no-fx-trace
 ```
 
 ---
@@ -175,7 +243,7 @@ python -m modelsig.analyze Qwen/Qwen3-7B Qwen/Qwen3-72B \
 **Problem:** You want to validate a new vLLM kernel for Qwen3-72B but CI is limited to A10G GPUs (24 GB VRAM).
 
 ```bash
-python -m modelsig.analyze Qwen/Qwen3-7B Qwen/Qwen3-72B --compare --output table
+modelsig Qwen/Qwen3-7B Qwen/Qwen3-72B --compare --output table
 ```
 
 **Expected result:** `ISOMORPHIC / FULL_SUBSTITUTE` — same GQA pattern, same op set, uniform scaling. You can run full functional tests on 7B and gate the 72B behind a nightly canary run.
@@ -187,7 +255,7 @@ python -m modelsig.analyze Qwen/Qwen3-7B Qwen/Qwen3-72B --compare --output table
 **Problem:** Does Qwen3-30B-A3B (MoE) behave like a drop-in proxy for Qwen3-235B-A22B?
 
 ```bash
-python -m modelsig.analyze Qwen/Qwen3-30B-A3B Qwen/Qwen3-235B-A22B \
+modelsig Qwen/Qwen3-30B-A3B Qwen/Qwen3-235B-A22B \
     --compare --multi-fidelity --output markdown
 ```
 
@@ -203,7 +271,7 @@ Both are MoE models from the same family → `ISOMORPHIC`. The multi-fidelity pl
 **Problem:** Can Llama-3.1-8B proxy-test a Mistral-7B?
 
 ```bash
-python -m modelsig.analyze meta-llama/Llama-3.1-8B-Instruct mistralai/Mistral-7B-v0.1 \
+modelsig meta-llama/Llama-3.1-8B-Instruct mistralai/Mistral-7B-v0.1 \
     --compare --output json
 ```
 
@@ -216,30 +284,25 @@ Both are dense GQA decoders with the same op set → `ISOMORPHIC / FULL_SUBSTITU
 **Problem:** You converted GPT-2 to ONNX and want to verify the ONNX version matches the torch version structurally.
 
 ```bash
-python -m modelsig.analyze openai-community/gpt2 onnx-community/gpt2 --compare --output table
+modelsig openai-community/gpt2 onnx-community/gpt2 --compare --output table
 ```
 
-The ONNX version (from `onnx-community/gpt2`) is parsed from the `.onnx` graph file.
-The safetensors version is parsed from the header.
-Both share the same abstract key set → `ISOMORPHIC`.
+The ONNX version is parsed from the `.onnx` graph file. The safetensors version is parsed from the header. Both share the same abstract key set → `ISOMORPHIC`.
 
 ---
 
 ### Scenario 5 — Quantized Model Compatibility
 
-**Problem:** Will `nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4` (quantized to FP4)
-behave the same as the BF16 variant?
+**Problem:** Will `nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4` (quantized to FP4) behave the same as the BF16 variant?
 
 ```bash
-python -m modelsig.analyze \
+modelsig \
     nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 \
     nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 \
     --compare --fast --output table
 ```
 
-Both share the same architecture (120B MoE). `--fast` uses config-only mode to avoid
-downloading large safetensors headers. Result: `ISOMORPHIC` — same layer topology,
-only dtype differs.
+Both share the same architecture (120B MoE). `--fast` uses config-only mode to avoid downloading large safetensors headers. Result: `ISOMORPHIC` — same layer topology, only dtype differs.
 
 ---
 
@@ -248,37 +311,36 @@ only dtype differs.
 **Problem:** Prepare a quantization validation plan for a fleet of Qwen models.
 
 ```bash
-python -m modelsig.analyze \
+modelsig \
     Qwen/Qwen3-0.6B Qwen/Qwen3-1.7B Qwen/Qwen3-4B Qwen/Qwen3-7B \
     --compare --quant-path --output json --save qwen3_fleet.json
 ```
 
-The `quant_path_signature` block for each model documents:
-`arch_template` (gqa_decoder), `kv_cache_dtype`, `group_size`, `scale_scheme` —
-feeding directly into a quantization config generator.
+The `quant_path_signature` block for each model documents `arch_template` (gqa_decoder), `kv_cache_dtype`, `group_size`, `scale_scheme` — feeding directly into a quantization config generator.
 
 ---
 
 ## CLI Reference
 
 ```
-python -m modelsig.analyze MODEL_ID [MODEL_ID ...] [OPTIONS]
+modelsig MODEL_ID [MODEL_ID ...] [OPTIONS]
 
 Arguments:
-  MODEL_ID          HF model ID (e.g. Qwen/Qwen3-7B) or local:PATH
+  MODEL_ID              HF model ID (e.g. Qwen/Qwen3-7B) or local:PATH
 
 Options:
-  --output          json | table | markdown  (default: json)
-  --compare         Compute pairwise coverage for all model pairs
-  --save FILE       Save output to file
-  --fast            Config-only mode — no safetensors/ONNX download
-  --quant-path      Include QuantPathSignature block
-  --multi-fidelity  Include 4-level multi-fidelity test plan
-  --no-fx-trace     Disable FX symbolic trace (on by default)
-  --no-hook-capture Disable forward-hook capture (on by default)
-  --token TOKEN     HF Hub token for private/gated models
-  --timeout SEC     HTTP timeout (default: 30)
-  --no-color        Disable ANSI colors in table output
+  --output              json | table | markdown  (default: json)
+  --compare             Compute pairwise coverage for all model pairs
+  --save FILE           Save output to file
+  --fast                Config-only mode — no safetensors/ONNX download
+  --quant-path          Include QuantPathSignature block
+  --multi-fidelity      Include 4-level multi-fidelity test plan
+  --no-fx-trace         Disable FX symbolic trace (on by default)
+  --no-hook-capture     Disable forward-hook capture (on by default)
+  --token TOKEN         HF Hub token for private/gated models
+  --timeout SEC         HTTP timeout (default: 30)
+  --no-color            Disable ANSI colors in table output
+  --trust-remote-code   Allow trust_remote_code=True (⚠ enables arbitrary code execution)
 ```
 
 ---
@@ -317,7 +379,7 @@ modelsig/
 │
 ├── comparison/
 │   ├── phases.py           Phase 1/2/3 isomorphism tests
-│   ├── ratios.py           Shape ratio uniformity analysis (grok)
+│   ├── ratios.py           Shape ratio uniformity analysis
 │   ├── coverage.py         Unified compute_coverage + test strategy verdict
 │   └── multifidelity.py    4-level multi-fidelity test plan builder
 │
@@ -330,6 +392,14 @@ modelsig/
 
 ---
 
+## Security
+
+- **No arbitrary code execution by default.** `trust_remote_code` is `False` unless explicitly set via `--trust-remote-code`.
+- **Token safety.** The HF token is passed via HTTP headers only — never embedded in URLs or logged to stderr.
+- **No weight download.** Only metadata (safetensors header, ONNX graph, config.json) is fetched.
+
+---
+
 ## Design Principles
 
 | Principle | Implementation |
@@ -339,17 +409,44 @@ modelsig/
 | **Graceful degradation** | Every heavy dependency is optional — falls back to built-in parsers |
 | **Architecture-agnostic** | Works on dense decoders, GQA models, MoE, vision-language, speech, classification |
 | **Single CLI, composable API** | Import any module independently or use the unified CLI |
+| **Safe by default** | `trust_remote_code=False`; token in headers not URLs |
+
+---
+
+## Supported Model Families
+
+Validated weekly against 57+ models:
+
+**Safetensors:** Qwen3.5, Qwen2.5, DeepSeek-V3, Kimi-K2, MiniMax-M2, GLM-5, Nemotron, Granite, BitNet, MiroThinker, Sarvam, Reka, LocoTrainer, OmniCoder, Nanbeige, Param …
+
+**ONNX:** Qwen3.5-ONNX, LFM2, Olmo-Hybrid, Voxtral, Granite-speech, BERT, RoBERTa, CodeT5, image-detection classifiers …
 
 ---
 
 ## Contributing
 
-All logic is in the `modelsig/` package. Each subdirectory has a single responsibility.
-Tests live in `tests/` and cover unit + integration scenarios.
+All logic is in the `modelsig/` package. Each subdirectory has a single responsibility. Tests live in `tests/` and cover 130+ unit + integration scenarios.
 
 ```bash
-pip install pytest
+git clone https://github.com/joe0731/modelsig
+cd modelsig
+pip install -e ".[dev]"
 pytest tests/ -v
 ```
 
 Weekly validation against the full model zoo runs via GitHub Actions (`.github/workflows/weekly-validation.yml`).
+
+---
+
+## Related Projects
+
+- [huggingface_hub](https://github.com/huggingface/huggingface_hub) — HF Hub Python client
+- [safetensors](https://github.com/huggingface/safetensors) — safe, zero-copy tensor serialization
+- [vLLM](https://github.com/vllm-project/vllm) — high-throughput LLM inference
+- [ONNX Runtime](https://github.com/microsoft/onnxruntime) — cross-platform inference accelerator
+
+---
+
+## License
+
+Apache 2.0 — see [LICENSE](LICENSE).

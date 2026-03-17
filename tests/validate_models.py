@@ -101,9 +101,9 @@ ALL_MODELS = SAFETENSORS_MODELS + ONNX_MODELS
 # ---------------------------------------------------------------------------
 
 def _run_one(model_id: str, mode: str, timeout: int = 120) -> dict:
-    """Run modelsig.analyze on one model and parse the JSON result."""
+    """Run modelsig CLI on one model and parse the JSON result."""
     cmd = [
-        sys.executable, "-m", "modelsig.analyze",
+        sys.executable, "-m", "modelsig.analyze",  # works pre-install; `modelsig` after pip install
         model_id,
         "--output", "json",
         "--no-fx-trace", "--no-hook-capture",

@@ -36,14 +36,13 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install dependencies
+      - name: Install modelsig and dependencies
         run: |
           pip install --upgrade pip
-          pip install huggingface_hub onnx requests
-          # transformers for AutoConfig normalization
-          pip install transformers accelerate
-          # pytest for unit tests
-          pip install pytest
+          # Install modelsig package (registers the `modelsig` CLI entry point)
+          pip install -e ".[dev]"
+          # Optional: onnx + transformers for richer analysis
+          pip install onnx transformers accelerate
 
       - name: Run unit tests
         run: |
@@ -51,8 +50,6 @@ jobs:
             --ignore=tests/validate_models.py \
             --tb=short \
             2>&1 | tee results/unit_test_output.txt || true
-        env:
-          PYTHONPATH: .
 
       - name: Create results directory
         run: mkdir -p results
@@ -66,7 +63,6 @@ jobs:
             --timeout 90 \
             2>&1 | tee results/safetensors_log.txt
         env:
-          PYTHONPATH: .
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         continue-on-error: true
 
@@ -79,7 +75,6 @@ jobs:
             --timeout 120 \
             2>&1 | tee results/onnx_log.txt
         env:
-          PYTHONPATH: .
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         continue-on-error: true
 

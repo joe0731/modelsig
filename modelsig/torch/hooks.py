@@ -4,16 +4,17 @@ import sys
 from typing import Optional
 
 
-def run_hook_capture(model_id: str, local_path: Optional[str]) -> dict:
+def run_hook_capture(model_id: str, local_path: Optional[str],
+                     trust_remote_code: bool = False) -> dict:
     try:
         import torch
         from transformers import AutoModelForCausalLM, AutoConfig
 
         path = local_path or model_id
-        cfg = AutoConfig.from_pretrained(path, trust_remote_code=True)
+        cfg = AutoConfig.from_pretrained(path, trust_remote_code=trust_remote_code)
         with torch.device("meta"):
             model = AutoModelForCausalLM.from_config(cfg, torch_dtype=torch.float32,
-                                                      trust_remote_code=True)
+                                                      trust_remote_code=trust_remote_code)
             model.eval()
 
         shapes: dict = {}

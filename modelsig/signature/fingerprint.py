@@ -147,6 +147,7 @@ def build_fingerprint(
     quant_path: bool = False,
     fast: bool = False,
     timeout: int = 30,
+    trust_remote_code: bool = False,
 ) -> ModelFingerprint:
     print(f"  Analyzing: {model_id}", file=sys.stderr)
     config = load_config(model_id, local_path)
@@ -209,11 +210,11 @@ def build_fingerprint(
 
     fx_available = False
     if fx_trace:
-        fx_available = run_fx_trace(model_id, local_path)
+        fx_available = run_fx_trace(model_id, local_path, trust_remote_code=trust_remote_code)
 
     hook_shapes: dict = {}
     if hook_capture:
-        hook_shapes = run_hook_capture(model_id, local_path)
+        hook_shapes = run_hook_capture(model_id, local_path, trust_remote_code=trust_remote_code)
 
     return ModelFingerprint(
         model_id=model_id,
