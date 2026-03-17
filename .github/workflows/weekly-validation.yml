@@ -1,0 +1,206 @@
+name: Weekly Model Zoo Validation
+
+on:
+  schedule:
+    # Every Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      group:
+        description: 'Model group to validate'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - safetensors
+          - onnx
+      workers:
+        description: 'Parallel workers'
+        required: false
+        default: '4'
+
+jobs:
+  validate:
+    name: Validate model zoo
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install huggingface_hub onnx requests
+          # transformers for AutoConfig normalization
+          pip install transformers accelerate
+          # pytest for unit tests
+          pip install pytest
+
+      - name: Run unit tests
+        run: |
+          pytest tests/ -v \
+            --ignore=tests/validate_models.py \
+            --tb=short \
+            2>&1 | tee results/unit_test_output.txt || true
+        env:
+          PYTHONPATH: .
+
+      - name: Create results directory
+        run: mkdir -p results
+
+      - name: Validate safetensors models
+        run: |
+          python tests/validate_models.py \
+            --group safetensors \
+            --workers ${{ github.event.inputs.workers || '4' }} \
+            --save results/safetensors_results.json \
+            --timeout 90 \
+            2>&1 | tee results/safetensors_log.txt
+        env:
+          PYTHONPATH: .
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        continue-on-error: true
+
+      - name: Validate ONNX models
+        run: |
+          python tests/validate_models.py \
+            --group onnx \
+            --workers ${{ github.event.inputs.workers || '4' }} \
+            --save results/onnx_results.json \
+            --timeout 120 \
+            2>&1 | tee results/onnx_log.txt
+        env:
+          PYTHONPATH: .
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        continue-on-error: true
+
+      - name: Generate failure report
+        if: always()
+        run: |
+          python - <<'EOF'
+          import json, sys, os
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          results_dir = Path("results")
+          all_results = []
+
+          for fname in ["safetensors_results.json", "onnx_results.json"]:
+            path = results_dir / fname
+            if path.exists():
+              data = json.loads(path.read_text())
+              all_results.extend(data.get("results", []))
+
+          failed = [r for r in all_results if r.get("status") == "FAIL"]
+          passed = [r for r in all_results if r.get("status") == "PASS"]
+
+          # Write failure log
+          report_lines = [
+            f"# modelsig Weekly Validation Report",
+            f"",
+            f"**Date:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+            f"**Commit:** {os.environ.get('GITHUB_SHA', 'unknown')[:8]}",
+            f"",
+            f"## Summary",
+            f"",
+            f"| Status | Count |",
+            f"|--------|-------|",
+            f"| PASS | {len(passed)} |",
+            f"| FAIL | {len(failed)} |",
+            f"| TOTAL | {len(all_results)} |",
+            f"",
+          ]
+
+          if passed:
+            report_lines += [
+              "## Passed Models",
+              "",
+              "| Model | Source | Model Type | Hidden | Tensors | Time(s) |",
+              "|-------|--------|------------|--------|---------|---------|",
+            ]
+            for r in sorted(passed, key=lambda x: x["model_id"]):
+              report_lines.append(
+                f"| `{r['model_id']}` | {r.get('source','?')} | {r.get('model_type','?')} "
+                f"| {r.get('hidden_size','?')} | {r.get('tensors','?')} | {r.get('elapsed_s','?')} |"
+              )
+            report_lines.append("")
+
+          if failed:
+            report_lines += [
+              "## Failed Models",
+              "",
+              "| Model | Error | Time(s) |",
+              "|-------|-------|---------|",
+            ]
+            for r in sorted(failed, key=lambda x: x["model_id"]):
+              err = r.get("error", "unknown").replace("|", "\\|")
+              report_lines.append(
+                f"| `{r['model_id']}` | {err} | {r.get('elapsed_s','?')} |"
+              )
+            report_lines.append("")
+
+            # Detailed stderr for each failure
+            report_lines += ["## Failure Details", ""]
+            for r in failed:
+              report_lines += [
+                f"### `{r['model_id']}`",
+                f"",
+                f"**Error:** {r.get('error', 'unknown')}",
+                f"",
+              ]
+              if r.get("stderr"):
+                report_lines += [
+                  "**stderr:**",
+                  "```",
+                  r["stderr"][-3000:],
+                  "```",
+                  "",
+                ]
+
+          report_text = "\n".join(report_lines)
+          Path("results/validation_report.md").write_text(report_text)
+          print(report_text)
+
+          # Exit non-zero if any failures
+          sys.exit(1 if failed else 0)
+          EOF
+        continue-on-error: true
+
+      - name: Upload results as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-results-${{ github.run_number }}
+          path: results/
+          retention-days: 90
+
+      - name: Create GitHub issue on failures
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.existsSync('results/validation_report.md')
+              ? fs.readFileSync('results/validation_report.md', 'utf8')
+              : 'No report generated.';
+
+            const truncated = report.length > 60000
+              ? report.slice(0, 60000) + '\n\n...(truncated, see artifact for full report)'
+              : report;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Weekly validation failures — ${new Date().toISOString().slice(0,10)}`,
+              body: truncated,
+              labels: ['validation', 'automated'],
+            });
