@@ -14,7 +14,10 @@ def build_arch_fingerprint(config: dict, tensor_meta: dict) -> dict:
     if "head_dim" not in fp:
         hs = fp.get("hidden_size")
         nah = fp.get("num_attention_heads")
-        if hs and nah:
+        # num_attention_heads can be a list (per-layer) in some hierarchical models
+        if isinstance(nah, list):
+            nah = max(nah) if nah else None
+        if isinstance(hs, int) and isinstance(nah, int) and nah > 0:
             fp["head_dim"] = hs // nah
 
     is_moe = bool(
@@ -49,8 +52,11 @@ def compute_dimension_ratios(config: dict) -> dict:
     ffn = config.get("intermediate_size")
     nah = config.get("num_attention_heads")
     nkv = config.get("num_key_value_heads")
-    if h and ffn:
+    # Guard against per-layer list values
+    if isinstance(nah, list): nah = max(nah) if nah else None
+    if isinstance(nkv, list): nkv = max(nkv) if nkv else None
+    if isinstance(h, int) and isinstance(ffn, int) and h > 0:
         ratios["ffn_expansion"] = round(ffn / h, 6)
-    if nah and nkv and nkv > 0:
+    if isinstance(nah, int) and isinstance(nkv, int) and nkv > 0:
         ratios["gqa_ratio"] = round(nah / nkv, 6)
     return ratios

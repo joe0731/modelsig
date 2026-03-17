@@ -151,8 +151,16 @@ def _run_one(model_id: str, mode: str, timeout: int = 120) -> dict:
         source = model_data.get("source", "unknown")
         tensors = len(model_data.get("static_weight_signature", {}))
 
-        # PASS criteria: must have a model_type or hidden_size, and source is not "error"
-        if source == "error" or (not arch.get("model_type") and not arch.get("hidden_size")):
+        # PASS criteria:
+        #   source is not "error"  AND
+        #   at least one of: model_type, hidden_size, tensors > 0, or onnx_op_types present
+        has_arch_data = (
+            arch.get("model_type") or
+            arch.get("hidden_size") or
+            tensors > 0 or
+            bool(model_data.get("onnx_op_types"))
+        )
+        if source == "error" or not has_arch_data:
             return {
                 "model_id": model_id,
                 "mode": mode,

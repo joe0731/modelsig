@@ -93,12 +93,19 @@ def _minimal_arch_config(config: dict) -> dict:
     }
 
 
+def _scalar_int(v) -> int:
+    """Return v as int, handling per-layer list values (take max)."""
+    if isinstance(v, list):
+        return max(v) if v else 0
+    return int(v) if v else 0
+
+
 def _synthetic_sig_from_config(cfg: dict) -> Tuple[dict, List[str]]:
-    h = cfg.get("hidden_size") or 0
-    i = cfg.get("intermediate_size") or 0
-    v = cfg.get("vocab_size") or 0
-    nah = cfg.get("num_attention_heads") or 0
-    nkv = cfg.get("num_key_value_heads") or nah
+    h = _scalar_int(cfg.get("hidden_size"))
+    i = _scalar_int(cfg.get("intermediate_size"))
+    v = _scalar_int(cfg.get("vocab_size"))
+    nah = _scalar_int(cfg.get("num_attention_heads"))
+    nkv = _scalar_int(cfg.get("num_key_value_heads")) or nah
     head_dim = (h // nah) if nah else 0
     is_moe = cfg.get("is_moe", False)
     sig: dict = {}
