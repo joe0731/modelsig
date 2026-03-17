@@ -51,13 +51,6 @@ cd modelsig
 pip install -e .
 ```
 
-### Minimal (no optional deps)
-
-```bash
-pip install modelsig
-# Works for all safetensors + config-only fast mode
-```
-
 ### Full (all parsers enabled)
 
 ```bash
@@ -340,7 +333,8 @@ Options:
   --token TOKEN         HF Hub token for private/gated models
   --timeout SEC         HTTP timeout (default: 30)
   --no-color            Disable ANSI colors in table output
-  --trust-remote-code   Allow trust_remote_code=True (⚠ enables arbitrary code execution)
+  --trust-remote-code   Allow trust_remote_code=True for custom model code
+                        ⚠ enables arbitrary code execution — use only for trusted models
 ```
 
 ---
@@ -415,11 +409,23 @@ modelsig/
 
 ## Supported Model Families
 
-Validated weekly against 57+ models:
+Validated weekly against **57 models** (29 safetensors + 28 ONNX):
 
-**Safetensors:** Qwen3.5, Qwen2.5, DeepSeek-V3, Kimi-K2, MiniMax-M2, GLM-5, Nemotron, Granite, BitNet, MiroThinker, Sarvam, Reka, LocoTrainer, OmniCoder, Nanbeige, Param …
+**Safetensors (full header fetch):**
+Qwen3.5-{0.8B,4B,9B,27B,35B-A3B,397B-A17B}, Qwen2.5-7B-Instruct, Qwen3-Coder-Next,
+DeepSeek-V3.2, Kimi-K2.5, MiniMax-M2.5, GLM-5,
+Nemotron-3-{Nano-4B, Super-120B}-{BF16,NVFP4,FP8},
+Granite-4.0-1b-speech, BitNet-b1.58-2B-4T, MiroThinker-{1.7,1.7-mini},
+Sarvam-{30b,105b}, Reka-edge-2603, LocoTrainer-4B, OmniCoder-9B,
+Nanbeige4.1-3B, Param2-17B-A2.4B, gpt-oss-20b, all-MiniLM-L6-v2
 
-**ONNX:** Qwen3.5-ONNX, LFM2, Olmo-Hybrid, Voxtral, Granite-speech, BERT, RoBERTa, CodeT5, image-detection classifiers …
+**ONNX (graph-only, no weight download):**
+Qwen3.5-{0.8B,2B,4B}-ONNX, Qwen3-{4B-VL,VL-2B,Reranker-0.6B}-ONNX,
+Qwen2.5-{0.5B,VL-3B}-ONNX, LFM2-24B-A2B, Olmo-Hybrid-{SFT,DPO,Think}-7B,
+Voxtral-Mini-4B, Granite-4.0-1b-speech, Nemotron-Nano-4B,
+BERT-multilingual-NER, chinese-RoBERTa, multilingual-MiniLMv2, CodeT5,
+Jan-code-4b, Josiefied-Qwen3.5-0.8B, IndoBERT-news-classification,
+ai-image-detection × 4, vehicle-classification, tmr-text-detector
 
 ---
 
