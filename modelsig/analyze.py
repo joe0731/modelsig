@@ -59,6 +59,9 @@ Examples:
     )
     p.add_argument("model_ids", nargs="*", metavar="MODEL_ID",
                    help="HF model IDs or local:PATH entries")
+    p.add_argument("-m", "--model", dest="model_flag", action="append",
+                   metavar="MODEL_ID", default=None,
+                   help="Model ID (repeatable; merged with positional MODEL_IDs)")
     p.add_argument("--local", metavar="PATH", default=None,
                    help="Local directory for the first positional MODEL_ID")
     p.add_argument("--output", choices=["json", "table", "markdown"], default="json",
@@ -86,6 +89,9 @@ Examples:
     p.add_argument("--trust-remote-code", action="store_true", dest="trust_remote_code",
                    help="Pass trust_remote_code=True to AutoConfig/AutoModel (use only for "
                         "verified models — enables arbitrary code execution)")
+    p.add_argument("--layer-sig", action="store_true", dest="layer_sig",
+                   help="Collect per-module input/output dtype+shape signatures via forward hooks "
+                        "(requires torch + transformers)")
     return p
 
 
@@ -96,7 +102,7 @@ def main() -> int:
     if getattr(args, "token", None):
         _hf_client.set_token(args.token)
 
-    raw_ids = list(args.model_ids)
+    raw_ids = list(args.model_ids) + (args.model_flag or [])
     if args.local and not raw_ids:
         raw_ids = [os.path.basename(args.local.rstrip("/"))]
 
@@ -128,6 +134,7 @@ def main() -> int:
                 fast=args.fast,
                 timeout=args.timeout,
                 trust_remote_code=args.trust_remote_code,
+                layer_sig=args.layer_sig,
             )
         except Exception as exc:
             print(f"ERROR analyzing {mid}: {exc}", file=sys.stderr)

@@ -15,6 +15,7 @@ from ..onnx.ops import onnx_op_types_to_canonical
 from ..onnx.selector import is_onnx_model
 from ..torch.fx_trace import run_fx_trace
 from ..torch.hooks import run_hook_capture
+from ..torch.layer_sig import collect_layer_signatures
 from .static import build_static_weight_signature, norm_dtype, param_count
 from .arch import build_arch_fingerprint, build_kv_cache_shape_pattern, compute_dimension_ratios
 from .quant import build_quant_path_signature
@@ -35,6 +36,7 @@ class ModelFingerprint:
     template_signature: Dict[str, dict] = field(default_factory=dict)
     quant_path_signature: Optional[dict] = None
     fx_trace_available: bool = False
+    layer_signatures: Dict[str, dict] = field(default_factory=dict)
     source: str = "safetensors"
 
 
@@ -148,6 +150,7 @@ def build_fingerprint(
     fast: bool = False,
     timeout: int = 30,
     trust_remote_code: bool = False,
+    layer_sig: bool = False,
 ) -> ModelFingerprint:
     print(f"  Analyzing: {model_id}", file=sys.stderr)
     config = load_config(model_id, local_path)
@@ -216,6 +219,10 @@ def build_fingerprint(
     if hook_capture:
         hook_shapes = run_hook_capture(model_id, local_path, trust_remote_code=trust_remote_code)
 
+    layer_sigs: dict = {}
+    if layer_sig:
+        layer_sigs = collect_layer_signatures(model_id, local_path, trust_remote_code=trust_remote_code)
+
     return ModelFingerprint(
         model_id=model_id,
         static_weight_signature=static_sig,
@@ -229,5 +236,6 @@ def build_fingerprint(
         template_signature=template_sig,
         quant_path_signature=qps,
         fx_trace_available=fx_available,
+        layer_signatures=layer_sigs,
         source=source,
     )

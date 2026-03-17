@@ -22,6 +22,8 @@ def fp_to_dict(fp: ModelFingerprint) -> dict:
         d["quant_path_signature"] = fp.quant_path_signature
     if fp.hook_shapes:
         d["hook_shapes_count"] = len(fp.hook_shapes)
+    if fp.layer_signatures:
+        d["layer_signatures"] = fp.layer_signatures
     return d
 
 
