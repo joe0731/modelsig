@@ -106,7 +106,6 @@ def _run_one(model_id: str, mode: str, timeout: int = 120) -> dict:
         sys.executable, "-m", "modelsig.analyze",  # works pre-install; `modelsig` after pip install
         model_id,
         "--output", "json",
-        "--no-fx-trace", "--no-hook-capture",
     ]
     if mode == "fast":
         cmd.append("--fast")
