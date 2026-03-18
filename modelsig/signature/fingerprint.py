@@ -13,12 +13,9 @@ from ..parsers.config import load_config
 from ..onnx.collector import collect_raw_tensors_onnx
 from ..onnx.ops import onnx_op_types_to_canonical
 from ..onnx.selector import is_onnx_model
-from ..torch.fx_trace import run_fx_trace
-from ..torch.hooks import run_hook_capture
 from ..torch.layer_sig import collect_layer_signatures
 from .static import build_static_weight_signature, norm_dtype, param_count
 from .arch import build_arch_fingerprint, build_kv_cache_shape_pattern, compute_dimension_ratios
-from .quant import build_quant_path_signature
 from .template import build_template_signature
 
 
@@ -29,13 +26,10 @@ class ModelFingerprint:
     arch_fingerprint: Dict[str, Any] = field(default_factory=dict)
     op_types: List[str] = field(default_factory=list)
     kv_cache_shape_pattern: str = ""
-    hook_shapes: Dict[str, dict] = field(default_factory=dict)
     unique_ops_highlevel: Set[str] = field(default_factory=set)
     layer_types: List[str] = field(default_factory=list)
     dimension_ratios: Dict[str, Any] = field(default_factory=dict)
     template_signature: Dict[str, dict] = field(default_factory=dict)
-    quant_path_signature: Optional[dict] = None
-    fx_trace_available: bool = False
     layer_signatures: Dict[str, dict] = field(default_factory=dict)
     source: str = "safetensors"
 
@@ -144,9 +138,6 @@ def _synthetic_sig_from_config(cfg: dict) -> Tuple[dict, List[str]]:
 def build_fingerprint(
     model_id: str,
     local_path: Optional[str] = None,
-    fx_trace: bool = True,
-    hook_capture: bool = True,
-    quant_path: bool = False,
     fast: bool = False,
     timeout: int = 30,
     trust_remote_code: bool = False,
@@ -209,15 +200,6 @@ def build_fingerprint(
     dim_ratios = compute_dimension_ratios(config)
     template_sig = build_template_signature(tensor_meta)
     unique_ops_hl = _infer_unique_ops_highlevel(tensor_meta) if tensor_meta else set()
-    qps = build_quant_path_signature(arch_fp, config) if quant_path else None
-
-    fx_available = False
-    if fx_trace:
-        fx_available = run_fx_trace(model_id, local_path, trust_remote_code=trust_remote_code)
-
-    hook_shapes: dict = {}
-    if hook_capture:
-        hook_shapes = run_hook_capture(model_id, local_path, trust_remote_code=trust_remote_code)
 
     layer_sigs: dict = {}
     if layer_sig:
@@ -229,13 +211,10 @@ def build_fingerprint(
         arch_fingerprint=arch_fp,
         op_types=op_types,
         kv_cache_shape_pattern=kv_pattern,
-        hook_shapes=hook_shapes,
         unique_ops_highlevel=unique_ops_hl,
         layer_types=layer_types,
         dimension_ratios=dim_ratios,
         template_signature=template_sig,
-        quant_path_signature=qps,
-        fx_trace_available=fx_available,
         layer_signatures=layer_sigs,
         source=source,
     )

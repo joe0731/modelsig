@@ -8,6 +8,7 @@ from modelsig.comparison.phases import (
 from modelsig.comparison.ratios import _is_uniform, analyze_shape_ratios
 from modelsig.comparison.coverage import compute_coverage, _test_strategy
 from modelsig.comparison.multifidelity import build_multi_fidelity_plan, _size_score
+from modelsig.comparison.quant_transfer import estimate_quant_transferability
 
 
 # ---------------------------------------------------------------------------
@@ -321,3 +322,102 @@ class TestBuildMultiFidelityPlan:
         fp_dense = _make_fp("dense", hidden=4096, layers=32, is_moe=False)
         fp_moe   = _make_fp("moe",   hidden=4096, layers=32, is_moe=True)
         assert _size_score(fp_moe) > _size_score(fp_dense)
+
+
+# ---------------------------------------------------------------------------
+# quant_transfer.py
+# ---------------------------------------------------------------------------
+
+class TestEstimateQuantTransferability:
+    def test_isomorphic_same_family_high_score(self):
+        fp_a = _make_fp("small", hidden=2048, layers=24, inter=8192)
+        fp_b = _make_fp("large", hidden=4096, layers=32, inter=16384)
+        result = estimate_quant_transferability(
+            fp_a, fp_b,
+            isomorphism="ISOMORPHIC",
+            layer_type_coverage=1.0,
+            shape_all_uniform=True,
+        )
+        assert result["estimated_transferability"] >= 0.80
+        assert result["confidence"] == "HIGH"
+
+    def test_different_arch_low_confidence(self):
+        fp_a = _make_fp("a", is_moe=False)
+        fp_b = _make_fp("b", is_moe=True)
+        result = estimate_quant_transferability(
+            fp_a, fp_b,
+            isomorphism="DIFFERENT_ARCH",
+            layer_type_coverage=0.5,
+            shape_all_uniform=False,
+        )
+        # DIFFERENT_ARCH gets struct_score=0.20; confidence is always LOW
+        assert result["struct_sim_score"] == 0.20
+        assert result["confidence"] == "LOW"
+        # score is still dragged down vs ISOMORPHIC same-family
+        iso_result = estimate_quant_transferability(
+            fp_a, fp_b,
+            isomorphism="ISOMORPHIC",
+            layer_type_coverage=1.0,
+            shape_all_uniform=True,
+        )
+        assert result["estimated_transferability"] < iso_result["estimated_transferability"]
+
+    def test_moe_correction_applied(self):
+        fp_dense = _make_fp("dense", is_moe=False)
+        fp_moe = _make_fp("moe", is_moe=True)
+        result = estimate_quant_transferability(
+            fp_dense, fp_moe,
+            isomorphism="SCALE_ONLY",
+            layer_type_coverage=0.9,
+            shape_all_uniform=True,
+        )
+        assert result["moe_correction"] == 0.90
+
+    def test_same_moe_applies_095_correction(self):
+        fp_a = _make_fp("moe_small", is_moe=True)
+        fp_b = _make_fp("moe_large", is_moe=True)
+        result = estimate_quant_transferability(
+            fp_a, fp_b,
+            isomorphism="ISOMORPHIC",
+            layer_type_coverage=1.0,
+            shape_all_uniform=True,
+        )
+        assert result["moe_correction"] == 0.95
+
+    def test_large_hidden_size_ratio_adds_risk(self):
+        fp_a = _make_fp("small", hidden=1024)
+        fp_b = _make_fp("large", hidden=8192)  # 8x ratio
+        result = estimate_quant_transferability(
+            fp_a, fp_b,
+            isomorphism="ISOMORPHIC",
+            layer_type_coverage=1.0,
+            shape_all_uniform=True,
+        )
+        assert len(result["arch_risk_factors"]) >= 1
+        assert any("hidden_size" in r for r in result["arch_risk_factors"])
+
+    def test_output_keys_present(self):
+        fp_a = _make_fp("a")
+        fp_b = _make_fp("b")
+        result = estimate_quant_transferability(
+            fp_a, fp_b,
+            isomorphism="ISOMORPHIC",
+            layer_type_coverage=1.0,
+            shape_all_uniform=True,
+        )
+        for key in [
+            "struct_sim_score", "op_hist_sim", "layer_type_hist_sim",
+            "moe_correction", "arch_risk_factors",
+            "estimated_transferability", "confidence",
+            "recommended_methods", "caveats",
+        ]:
+            assert key in result, f"Missing key: {key}"
+
+    def test_coverage_matrix_includes_quant_transfer(self):
+        fp_a = _make_fp("a/small", hidden=2048)
+        fp_b = _make_fp("b/large", hidden=4096)
+        cov = compute_coverage(fp_a, fp_b)
+        assert "quant_transfer" in cov
+        qt = cov["quant_transfer"]
+        assert "estimated_transferability" in qt
+        assert 0.0 <= qt["estimated_transferability"] <= 1.0

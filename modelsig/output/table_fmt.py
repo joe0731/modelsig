@@ -70,6 +70,12 @@ def format_table(result: dict, color: bool = True) -> str:
             lines.append(f"    {level_str}  {strat.get('scope', strat.get('test_scope',''))}")
             lines.append(f"    {strat.get('description','')}")
             lines.append(f"    Recommendation : {cv.get('recommendation','')}")
+            qt = cv.get("quant_transfer", {})
+            if qt:
+                score = qt.get("estimated_transferability", 0)
+                conf = qt.get("confidence", "?")
+                methods = ", ".join(qt.get("recommended_methods", []))
+                lines.append(f"    Quant transfer : {score:.2f} [{conf}]  →  {methods}")
             if cv.get("non_uniform_shape_keys"):
                 lines.append(f"    Non-uniform keys: {cv['non_uniform_shape_keys']}")
             lines.append("")

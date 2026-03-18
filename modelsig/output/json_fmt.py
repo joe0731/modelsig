@@ -13,15 +13,10 @@ def fp_to_dict(fp: ModelFingerprint) -> dict:
         "layer_types": fp.layer_types,
         "kv_cache_shape_pattern": fp.kv_cache_shape_pattern,
         "dimension_ratios": fp.dimension_ratios,
-        "fx_trace_available": fp.fx_trace_available,
         "source": fp.source,
     }
     if fp.arch_fingerprint.get("onnx_op_types"):
         d["onnx_op_types"] = fp.arch_fingerprint.pop("onnx_op_types")
-    if fp.quant_path_signature:
-        d["quant_path_signature"] = fp.quant_path_signature
-    if fp.hook_shapes:
-        d["hook_shapes_count"] = len(fp.hook_shapes)
     if fp.layer_signatures:
         d["layer_signatures"] = fp.layer_signatures
     return d

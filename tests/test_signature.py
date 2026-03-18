@@ -7,7 +7,6 @@ from modelsig.signature.static import (
 from modelsig.signature.arch import (
     build_arch_fingerprint, build_kv_cache_shape_pattern, compute_dimension_ratios,
 )
-from modelsig.signature.quant import build_quant_path_signature
 from modelsig.signature.template import build_template_signature
 from modelsig.signature.fingerprint import (
     ModelFingerprint, _synthetic_sig_from_config, _minimal_arch_config,
@@ -215,39 +214,6 @@ class TestDimensionRatios:
 
     def test_empty_config(self):
         assert compute_dimension_ratios({}) == {}
-
-
-# ---------------------------------------------------------------------------
-# quant.py
-# ---------------------------------------------------------------------------
-
-class TestBuildQuantPathSignature:
-    def test_dense_decoder(self):
-        arch_fp = {"is_moe": False, "num_key_value_heads": 8, "num_attention_heads": 32}
-        qps = build_quant_path_signature(arch_fp, {})
-        assert qps["arch_template"] == "gqa_decoder"
-
-    def test_moe_decoder(self):
-        arch_fp = {"is_moe": True, "num_key_value_heads": 8, "num_attention_heads": 32}
-        qps = build_quant_path_signature(arch_fp, {})
-        assert qps["arch_template"] == "moe_decoder"
-
-    def test_full_mha(self):
-        arch_fp = {"is_moe": False, "num_key_value_heads": 32, "num_attention_heads": 32}
-        qps = build_quant_path_signature(arch_fp, {})
-        assert qps["arch_template"] == "dense_decoder"
-
-    def test_quant_config_fields(self):
-        arch_fp = {"is_moe": False}
-        cfg = {"quantization_config": {"quant_type": "awq", "group_size": 128}}
-        qps = build_quant_path_signature(arch_fp, cfg)
-        assert qps["quant_algo"] == "awq"
-        assert qps["group_size"] == 128
-
-    def test_required_keys_present(self):
-        qps = build_quant_path_signature({"is_moe": False}, {})
-        for key in ["arch_template", "quant_algo", "weight_dtype", "kv_cache_dtype"]:
-            assert key in qps
 
 
 # ---------------------------------------------------------------------------

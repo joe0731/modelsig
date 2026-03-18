@@ -26,14 +26,6 @@ def format_markdown(result: dict) -> str:
         lines.append(f"**Op types:** {', '.join(f'`{x}`' for x in mdata.get('op_types',[]))}")
         lines.append(f"\n**Layer types:** {', '.join(f'`{x}`' for x in mdata.get('layer_types',[]))}\n")
 
-        if mdata.get("quant_path_signature"):
-            lines.append("**QuantPathSignature:**\n")
-            lines.append("| Field | Value |")
-            lines.append("|-------|-------|")
-            for k, v in mdata["quant_path_signature"].items():
-                lines.append(f"| {k} | {v} |")
-            lines.append("")
-
     cov = result.get("coverage_matrix", {})
     if cov:
         lines.append("## Coverage Matrix\n")
@@ -85,6 +77,24 @@ def format_markdown(result: dict) -> str:
                 lines.append(f"**Non-uniform shape keys:** {cv['non_uniform_shape_keys']}\n")
             if cv.get("missing_highlevel_ops"):
                 lines.append(f"**Missing ops in A:** {cv['missing_highlevel_ops']}\n")
+            qt = cv.get("quant_transfer", {})
+            if qt:
+                lines.append("**Quantization Transferability (structural estimate):**\n")
+                lines.append("| Metric | Value |")
+                lines.append("|--------|-------|")
+                for k in ["estimated_transferability", "confidence", "struct_sim_score",
+                          "op_hist_sim", "layer_type_hist_sim", "moe_correction"]:
+                    if k in qt:
+                        lines.append(f"| {k} | {qt[k]} |")
+                lines.append("")
+                if qt.get("recommended_methods"):
+                    lines.append(f"**Recommended quant methods:** "
+                                 f"{', '.join(f'`{m}`' for m in qt['recommended_methods'])}\n")
+                if qt.get("arch_risk_factors"):
+                    lines.append("**Risk factors:**\n")
+                    for r in qt["arch_risk_factors"]:
+                        lines.append(f"- {r}")
+                    lines.append("")
 
     mfp = result.get("multi_fidelity_plan", {})
     if mfp:

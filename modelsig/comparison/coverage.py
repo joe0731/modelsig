@@ -1,9 +1,10 @@
-"""Unified coverage analysis combining all 5 plan approaches."""
+"""Unified coverage analysis combining structural phases and quant transferability."""
 from __future__ import annotations
 from typing import Dict
 from ..signature.fingerprint import ModelFingerprint
 from .phases import phase1_match, phase2_substructure_match, phase3_algebraic_check, determine_isomorphism
 from .ratios import analyze_shape_ratios
+from .quant_transfer import estimate_quant_transferability
 
 
 def _test_strategy(ltc: float, sc: float, can_sub: bool) -> dict:
@@ -86,6 +87,13 @@ def compute_coverage(fp_a: ModelFingerprint, fp_b: ModelFingerprint) -> dict:
 
     strategy = _test_strategy(layer_type_coverage, shape_compatibility, can_substitute)
 
+    quant_transfer = estimate_quant_transferability(
+        fp_a, fp_b,
+        isomorphism=isomorphism,
+        layer_type_coverage=layer_type_coverage,
+        shape_all_uniform=all_uniform,
+    )
+
     return {
         "isomorphism": isomorphism,
         "substitution_verdict": verdict,
@@ -108,4 +116,5 @@ def compute_coverage(fp_a: ModelFingerprint, fp_b: ModelFingerprint) -> dict:
         "non_uniform_shape_keys": [k for k, v in shape_ratios.items() if not v["uniform"]][:10],
         "test_strategy": strategy,
         "recommendation": iso_rec,
+        "quant_transfer": quant_transfer,
     }

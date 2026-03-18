@@ -54,7 +54,7 @@ Examples:
   modelsig local:/models/7b local:/models/72b --compare
   modelsig Qwen/Qwen3-7B --quant-path --output json
   modelsig Qwen/Qwen3-235B-A22B --fast --output table
-  modelsig Qwen/Qwen3-7B --no-fx-trace --no-hook-capture --output json
+  modelsig Qwen/Qwen3-7B --fast --output json
 """,
     )
     p.add_argument("model_ids", nargs="*", metavar="MODEL_ID",
@@ -70,18 +70,10 @@ Examples:
                    help="Compute pairwise coverage for all model pairs")
     p.add_argument("--save", metavar="FILE", default=None,
                    help="Save results to file")
-    p.add_argument("--quant-path", action="store_true", dest="quant_path",
-                   help="Include QuantPathSignature in output")
     p.add_argument("--multi-fidelity", action="store_true", dest="multi_fidelity",
                    help="Include 4-level multi-fidelity test plan")
     p.add_argument("--fast", action="store_true",
                    help="Config-only mode (no safetensors parsing, fastest)")
-    fx_grp = p.add_mutually_exclusive_group()
-    fx_grp.add_argument("--fx-trace", action="store_true", dest="fx_trace", default=True)
-    fx_grp.add_argument("--no-fx-trace", action="store_false", dest="fx_trace")
-    hk_grp = p.add_mutually_exclusive_group()
-    hk_grp.add_argument("--hook-capture", action="store_true", dest="hook_capture", default=True)
-    hk_grp.add_argument("--no-hook-capture", action="store_false", dest="hook_capture")
     p.add_argument("--timeout", type=int, default=30, metavar="SEC")
     p.add_argument("--token", metavar="TOKEN", default=None,
                    help="HuggingFace Hub token (overrides HF_TOKEN env var)")
@@ -129,9 +121,6 @@ def main() -> int:
             fingerprints[mid] = build_fingerprint(
                 model_id=mid,
                 local_path=local_dir,
-                fx_trace=args.fx_trace,
-                hook_capture=args.hook_capture,
-                quant_path=args.quant_path,
                 fast=args.fast,
                 timeout=args.timeout,
                 trust_remote_code=args.trust_remote_code,
