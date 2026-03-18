@@ -89,9 +89,10 @@ Examples:
     p.add_argument("--trust-remote-code", action="store_true", dest="trust_remote_code",
                    help="Pass trust_remote_code=True to AutoConfig/AutoModel (use only for "
                         "verified models — enables arbitrary code execution)")
-    p.add_argument("--layer-sig", action="store_true", dest="layer_sig",
-                   help="Collect per-module input/output dtype+shape signatures via forward hooks "
-                        "(requires torch + transformers)")
+    ls_grp = p.add_mutually_exclusive_group()
+    ls_grp.add_argument("--layer-sig", action="store_true", dest="layer_sig", default=True)
+    ls_grp.add_argument("--no-layer-sig", action="store_false", dest="layer_sig",
+                        help="Disable per-module I/O dtype+shape signature capture")
     return p
 
 
