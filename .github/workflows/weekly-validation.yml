@@ -42,10 +42,7 @@ jobs:
 
       - name: Install modelsig and dependencies
         run: |
-          # Install modelsig (registers the `modelsig` CLI entry point)
           uv sync --extra dev
-          # Optional: onnx + transformers for richer analysis
-          uv pip install onnx transformers accelerate
 
       - name: Run unit tests
         run: |

@@ -50,34 +50,26 @@ uv tool install modelsig  # install as a standalone CLI tool
 ```bash
 git clone https://github.com/joe0731/modelsig
 cd modelsig
-uv sync                   # install deps + editable package
-uv run modelsig --help    # run inside the uv environment
-```
-
-### Full (all parsers enabled)
-
-```bash
-uv sync --extra full
-# Adds: onnx, transformers, torch, safetensors
+uv sync                   # install all deps + editable package
+uv run modelsig --help
 ```
 
 ### Still using pip?
 
 ```bash
 pip install modelsig
-pip install "modelsig[full]"   # all optional parsers
 ```
 
-**Dependency breakdown:**
+**Dependencies (all installed by default):**
 
-| Package | Required | Purpose |
-|---------|----------|---------|
-| `requests` | ✅ | HTTP Range fetching for safetensors headers |
-| `huggingface_hub` | ✅ | Model file listing, downloads, auth |
-| `onnx` | optional | ONNX graph parsing (falls back to built-in protobuf) |
-| `transformers` | optional | AutoConfig normalization, FX trace, hook capture |
-| `torch` | optional | FX symbolic trace and forward-hook shape capture |
-| `safetensors` | optional | Local safetensors file parsing |
+| Package | Purpose |
+|---------|---------|
+| `requests` | HTTP Range fetching for safetensors headers |
+| `huggingface_hub` | Model file listing, downloads, auth |
+| `onnx` | ONNX graph parsing (falls back to built-in protobuf if unavailable) |
+| `transformers` | AutoConfig normalization, layer signature capture |
+| `torch` | Meta-device forward pass for layer I/O shape collection |
+| `safetensors` | Local safetensors file parsing |
 
 ---
 
@@ -472,7 +464,7 @@ All logic is in the `modelsig/` package. Each subdirectory has a single responsi
 ```bash
 git clone https://github.com/joe0731/modelsig
 cd modelsig
-uv sync                   # installs modelsig + dev deps
+uv sync --extra dev       # installs all deps + dev tools
 uv run pytest tests/ -v
 ```
 
