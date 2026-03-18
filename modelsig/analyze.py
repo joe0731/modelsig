@@ -1,23 +1,5 @@
 #!/usr/bin/env python3
-"""
-modelsig/analyze.py — CLI entry point.
-
-Synthesizes the best approaches from 5 independent plans:
-  chagpt     – 4-layer signature system, QuantPathSignature
-  gemini     – 3-phase isomorphism comparison, multi-fidelity test plan
-  grok       – shape-ratio uniformity analysis, ANSI color output
-  kimi       – OOP architecture (SafetensorAnalyzer, CoverageAnalyzer), optional FX trace
-  minimax    – forward-hook shape capture (lazy), test strategy, config-only fast mode
-
-Usage:
-  python analyze.py MODEL_ID [MODEL_ID ...] [OPTIONS]
-
-  python analyze.py Qwen/Qwen3-7B Qwen/Qwen3-72B --compare --output table
-  python analyze.py Qwen/Qwen3-30B-A3B Qwen/Qwen3-235B-A22B --compare --multi-fidelity
-  python analyze.py local:/models/7b local:/models/72b --compare --output markdown
-  python analyze.py Qwen/Qwen3-7B --quant-path --output json --save report.json
-  python analyze.py org/private-model --token hf_xxx --output table
-"""
+"""modelsig/analyze.py — CLI entry point."""
 
 from __future__ import annotations
 
@@ -52,9 +34,9 @@ Examples:
   modelsig Qwen/Qwen3-7B Qwen/Qwen3-30B-A3B Qwen/Qwen3-235B-A22B \\
       --compare --multi-fidelity --output markdown --save report.md
   modelsig local:/models/7b local:/models/72b --compare
-  modelsig Qwen/Qwen3-7B --quant-path --output json
+  modelsig -m Qwen/Qwen3-7B -m Qwen/Qwen3-72B --compare --output table
   modelsig Qwen/Qwen3-235B-A22B --fast --output table
-  modelsig Qwen/Qwen3-7B --fast --output json
+  modelsig -m Qwen/Qwen3-7B --output json
 """,
     )
     p.add_argument("model_ids", nargs="*", metavar="MODEL_ID",

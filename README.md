@@ -25,7 +25,7 @@ It compares structural fingerprints — shape ratios, operator sets, KV cache pa
 ## Key Features
 
 - **Zero weight download** — safetensors header via HTTP Range (~20 bytes), ONNX graph-only (no `.onnx_data`), or config-only fast mode
-- **5-layer fingerprint** — static weights, arch config, op types, KV cache pattern, optional hook shapes
+- **5-layer fingerprint** — static weights, arch config, op types, KV cache pattern, layer-level I/O signatures
 - **3-phase isomorphism comparison** — key overlap, substructure, algebraic scaling
 - **Substitution verdicts** — `FULL_SUBSTITUTE / PARTIAL_SUBSTITUTE / NO_SUBSTITUTE`
 - **4-level multi-fidelity test plan** — maps models to test coverage levels L1–L4
@@ -84,20 +84,23 @@ pip install "modelsig[full]"   # all optional parsers
 ## Quick Start
 
 ```bash
-# Analyze a single model
-modelsig Qwen/Qwen3-7B --output table
+# Analyze a single model (-m / --model flag)
+modelsig -m Qwen/Qwen3-7B --output table
 
 # Compare two models (proxy-test decision)
-modelsig Qwen/Qwen3-7B Qwen/Qwen3-72B --compare --output table
+modelsig -m Qwen/Qwen3-7B -m Qwen/Qwen3-72B --compare --output table
 
 # Fast mode for large models (config only, no download)
-modelsig nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 --fast --output table
+modelsig -m nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 --fast --output table
 
 # ONNX model
-modelsig onnx-community/Qwen3.5-0.8B-ONNX --output json
+modelsig -m onnx-community/Qwen3.5-0.8B-ONNX --output json
+
+# Skip layer-level I/O signature capture (faster, no torch needed)
+modelsig -m Qwen/Qwen3-7B --no-layer-sig --output json
 
 # Private/gated model
-modelsig org/private-model --token hf_xxx
+modelsig -m org/private-model --token hf_xxx
 # or: export HF_TOKEN=hf_xxx
 ```
 
@@ -121,7 +124,7 @@ For **fast mode** (`--fast`), only `config.json` is fetched (a few KB). No tenso
 | **L2** Architecture fingerprint | `hidden_size`, `num_hidden_layers`, `num_attention_heads`, `num_key_value_heads`, `intermediate_size`, `head_dim`, MoE config | `config.json` via AutoConfig |
 | **L3** Op type set | Canonical operator vocabulary: `aten/mm`, `attention`, `rms_norm`, `rope`, `silu`, `topk/router` … | tensor key patterns / ONNX opset |
 | **L4** KV cache shape pattern | `[batch, num_kv_heads, seq_len, head_dim]` | derived from L2 |
-| **L5** Hook shapes *(optional)* | Per-module I/O shapes from a forward pass on meta device | torch forward hooks |
+| **L5** Layer I/O signatures | Per-module `{input: [{dtype, shape}], output: [{dtype, shape}]}` on meta device | torch forward hooks (`--no-layer-sig` to skip) |
 
 ### 3-Phase Isomorphism Comparison
 
@@ -141,6 +144,26 @@ Result: `ISOMORPHIC` / `SCALE_ONLY` / `DIFFERENT_ARCH`
 | `PARTIAL_SUBSTITUTE` | Phase 1+2 pass or op coverage ≥ 80% |
 | `NO_SUBSTITUTE` | Different arch, MoE vs Dense mismatch, or key divergence |
 
+### Quantization Transferability Estimate
+
+When comparing two models, `modelsig` also computes a structural quantization transferability score:
+
+```
+struct_sim_score   — 1.0 (ISOMORPHIC) / 0.80 (SCALE_ONLY) / 0.20 (DIFFERENT_ARCH)
+op_hist_sim        — cosine similarity of operator frequency vectors
+layer_type_hist    — Jaccard similarity of layer type sets
+shape_uniform      — whether common weight shapes scale uniformly
+moe_correction     — ~5% penalty for mixed MoE/Dense pairs
+arch_risk_factors  — hidden_size ratio, GQA mismatch, FFN expansion, RoPE theta diff
+```
+
+Output: `estimated_transferability` score (0–1) with `confidence` (HIGH/MEDIUM/LOW),
+`recommended_methods` (GPTQ/AWQ/mixed-precision/expert-aware), and `caveats`.
+
+> This is a **structural pre-filter only**. SensCorr and RepAlign require actual calibration
+> data and are the strongest transfer predictors. Use this score to decide whether to attempt
+> transfer at all, not as a final guarantee.
+
 ### Multi-Fidelity Test Plan (4 levels)
 
 ```
@@ -157,7 +180,7 @@ L4 Canary       — large/MoE model: peak memory, TP/PP correctness
 ### Basic — analyze a single model
 
 ```bash
-modelsig Qwen/Qwen3-7B --output table
+modelsig -m Qwen/Qwen3-7B --output table
 ```
 
 ```
@@ -185,27 +208,27 @@ modelsig Qwen/Qwen3-7B --output table
 ### Compare models (proxy-testing decision)
 
 ```bash
-modelsig Qwen/Qwen3-7B Qwen/Qwen3-72B --compare --output table
+modelsig -m Qwen/Qwen3-7B -m Qwen/Qwen3-72B --compare --output table
 ```
 
 ### Full analysis with multi-fidelity plan
 
 ```bash
 modelsig \
-    Qwen/Qwen3-7B Qwen/Qwen3-30B-A3B Qwen/Qwen3-235B-A22B \
+    -m Qwen/Qwen3-7B -m Qwen/Qwen3-30B-A3B -m Qwen/Qwen3-235B-A22B \
     --compare --multi-fidelity --output markdown --save report.md
 ```
 
 ### ONNX model
 
 ```bash
-modelsig onnx-community/Qwen3-4B-ONNX --output json
+modelsig -m onnx-community/Qwen3-4B-ONNX --output json
 ```
 
 ### Config-only fast mode (no safetensors/ONNX fetch, instantaneous)
 
 ```bash
-modelsig Qwen/Qwen3-235B-A22B --fast --output table
+modelsig -m Qwen/Qwen3-235B-A22B --fast --output table
 ```
 
 ### Local model directory
@@ -218,14 +241,14 @@ modelsig local:/path/to/7b local:/path/to/72b --compare
 ### Private / gated models
 
 ```bash
-modelsig org/private-model --token hf_xxx
+modelsig -m org/private-model --token hf_xxx
 # or: export HF_TOKEN=hf_xxx
 ```
 
 ### Save report
 
 ```bash
-modelsig Qwen/Qwen3-7B Qwen/Qwen3-72B \
+modelsig -m Qwen/Qwen3-7B -m Qwen/Qwen3-72B \
     --compare --output markdown --save report.md
 ```
 
@@ -234,7 +257,7 @@ modelsig Qwen/Qwen3-7B Qwen/Qwen3-72B \
 ```bash
 # Only use --trust-remote-code for models you trust.
 # This allows execution of arbitrary Python code from the model repository.
-modelsig org/custom-model --trust-remote-code --no-fx-trace
+modelsig -m org/custom-model --trust-remote-code
 ```
 
 ---
@@ -246,7 +269,7 @@ modelsig org/custom-model --trust-remote-code --no-fx-trace
 **Problem:** You want to validate a new vLLM kernel for Qwen3-72B but CI is limited to A10G GPUs (24 GB VRAM).
 
 ```bash
-modelsig Qwen/Qwen3-7B Qwen/Qwen3-72B --compare --output table
+modelsig -m Qwen/Qwen3-7B -m Qwen/Qwen3-72B --compare --output table
 ```
 
 **Expected result:** `ISOMORPHIC / FULL_SUBSTITUTE` — same GQA pattern, same op set, uniform scaling. You can run full functional tests on 7B and gate the 72B behind a nightly canary run.
@@ -258,7 +281,7 @@ modelsig Qwen/Qwen3-7B Qwen/Qwen3-72B --compare --output table
 **Problem:** Does Qwen3-30B-A3B (MoE) behave like a drop-in proxy for Qwen3-235B-A22B?
 
 ```bash
-modelsig Qwen/Qwen3-30B-A3B Qwen/Qwen3-235B-A22B \
+modelsig -m Qwen/Qwen3-30B-A3B -m Qwen/Qwen3-235B-A22B \
     --compare --multi-fidelity --output markdown
 ```
 
@@ -274,7 +297,7 @@ Both are MoE models from the same family → `ISOMORPHIC`. The multi-fidelity pl
 **Problem:** Can Llama-3.1-8B proxy-test a Mistral-7B?
 
 ```bash
-modelsig meta-llama/Llama-3.1-8B-Instruct mistralai/Mistral-7B-v0.1 \
+modelsig -m meta-llama/Llama-3.1-8B-Instruct -m mistralai/Mistral-7B-v0.1 \
     --compare --output json
 ```
 
@@ -287,7 +310,7 @@ Both are dense GQA decoders with the same op set → `ISOMORPHIC / FULL_SUBSTITU
 **Problem:** You converted GPT-2 to ONNX and want to verify the ONNX version matches the torch version structurally.
 
 ```bash
-modelsig openai-community/gpt2 onnx-community/gpt2 --compare --output table
+modelsig -m openai-community/gpt2 -m onnx-community/gpt2 --compare --output table
 ```
 
 The ONNX version is parsed from the `.onnx` graph file. The safetensors version is parsed from the header. Both share the same abstract key set → `ISOMORPHIC`.
@@ -300,8 +323,8 @@ The ONNX version is parsed from the `.onnx` graph file. The safetensors version 
 
 ```bash
 modelsig \
-    nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 \
-    nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 \
+    -m nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 \
+    -m nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 \
     --compare --fast --output table
 ```
 
@@ -309,37 +332,41 @@ Both share the same architecture (120B MoE). `--fast` uses config-only mode to a
 
 ---
 
-### Scenario 6 — Batch Analysis with QuantPathSignature
+### Scenario 6 — Quantization Method Transfer
 
-**Problem:** Prepare a quantization validation plan for a fleet of Qwen models.
+**Problem:** You quantized Qwen3-7B with AWQ. Can that config transfer to Qwen3-72B?
 
 ```bash
 modelsig \
-    Qwen/Qwen3-0.6B Qwen/Qwen3-1.7B Qwen/Qwen3-4B Qwen/Qwen3-7B \
-    --compare --quant-path --output json --save qwen3_fleet.json
+    -m Qwen/Qwen3-7B -m Qwen/Qwen3-72B \
+    --compare --output json --save qwen3_quant_transfer.json
 ```
 
-The `quant_path_signature` block for each model documents `arch_template` (gqa_decoder), `kv_cache_dtype`, `group_size`, `scale_scheme` — feeding directly into a quantization config generator.
+The `quant_transfer` block in `coverage_matrix` gives:
+- `estimated_transferability` — composite score (0–1) based on structural similarity
+- `confidence` — HIGH/MEDIUM/LOW
+- `recommended_methods` — e.g. `GPTQ (W4A16)`, `AWQ (W4A16)`, `Mixed-precision`
+- `arch_risk_factors` — e.g. large hidden_size ratio, RoPE theta mismatch
+- `caveats` — whether activation-aware recalibration is needed
 
 ---
 
 ## CLI Reference
 
 ```
-modelsig MODEL_ID [MODEL_ID ...] [OPTIONS]
+modelsig [-m MODEL_ID ...] [MODEL_ID ...] [OPTIONS]
 
 Arguments:
-  MODEL_ID              HF model ID (e.g. Qwen/Qwen3-7B) or local:PATH
+  -m / --model MODEL_ID  HF model ID or local:PATH (repeatable, preferred)
+  MODEL_ID               positional alternative — same as -m
 
 Options:
   --output              json | table | markdown  (default: json)
   --compare             Compute pairwise coverage for all model pairs
   --save FILE           Save output to file
   --fast                Config-only mode — no safetensors/ONNX download
-  --quant-path          Include QuantPathSignature block
   --multi-fidelity      Include 4-level multi-fidelity test plan
-  --no-fx-trace         Disable FX symbolic trace (on by default)
-  --no-hook-capture     Disable forward-hook capture (on by default)
+  --no-layer-sig        Skip per-module I/O dtype+shape capture (faster)
   --token TOKEN         HF Hub token for private/gated models
   --timeout SEC         HTTP timeout (default: 30)
   --no-color            Disable ANSI colors in table output
@@ -371,20 +398,19 @@ modelsig/
 │   └── collector.py        Orchestrates HF download → parse pipeline
 │
 ├── torch/
-│   ├── fx_trace.py         FX symbolic trace on meta device (lazy torch import)
-│   └── hooks.py            Forward-hook I/O shape capture (lazy torch import)
+│   └── layer_sig.py        L5: per-module input/output dtype+shape via forward hooks
 │
 ├── signature/
 │   ├── static.py           L1: build_static_weight_signature, norm_key, norm_dtype
 │   ├── arch.py             L2: build_arch_fingerprint, KV cache pattern, dim ratios
-│   ├── quant.py            QuantPathSignature builder
 │   ├── template.py         Per-layer canonical submodule template (for phase-2)
 │   └── fingerprint.py      ModelFingerprint dataclass + build_fingerprint orchestrator
 │
 ├── comparison/
 │   ├── phases.py           Phase 1/2/3 isomorphism tests
 │   ├── ratios.py           Shape ratio uniformity analysis
-│   ├── coverage.py         Unified compute_coverage + test strategy verdict
+│   ├── quant_transfer.py   Structural quantization transferability estimator
+│   ├── coverage.py         Unified compute_coverage + test strategy + quant_transfer
 │   └── multifidelity.py    4-level multi-fidelity test plan builder
 │
 └── output/
