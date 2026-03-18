@@ -2,8 +2,9 @@
 │                         modelsig CLI Entry Point                              │            
 │                    analyze.py :: main()                                      │                 
 │                                                                              │                 
-│  args: MODEL_IDs  --compare  --multi-fidelity  --fast  --layer-sig          │                  
-│         --output [json|table|markdown]  --save FILE  --token HF_TOKEN       │                  
+│  args: -m MODEL_ID [...]  --compare  --multi-fidelity  --fast               │
+│         --layer-sig (default)  --no-layer-sig  --trust-remote-code          │
+│         --output [json|table|markdown]  --save FILE  --token  --no-color    │                  
 └───────────────────────────────┬─────────────────────────────────────────────┘                  
                                 │  for each MODEL_ID                                             
                                 ▼                                                                
@@ -209,7 +210,7 @@ User Input
               build_arch_fingerprint          ← Architecture params + MoE detection
               compute_dimension_ratios        ← ffn_expansion / gqa_ratio
               build_template_signature        ← Submodule key patterns
-              [torch meta device forward]     ← Optional --layer-sig
+              [torch meta device forward]     ← default on; --no-layer-sig to skip
                     │
               ModelFingerprint  ◄─────────────── Data carrier for all analyses
                     │
