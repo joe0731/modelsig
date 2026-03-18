@@ -40,7 +40,9 @@ It compares structural fingerprints — shape ratios, operator sets, KV cache pa
 ### From PyPI (recommended)
 
 ```bash
-pip install modelsig
+uv add modelsig           # add to a uv project
+# or
+uv tool install modelsig  # install as a standalone CLI tool
 ```
 
 ### From source
@@ -48,14 +50,22 @@ pip install modelsig
 ```bash
 git clone https://github.com/joe0731/modelsig
 cd modelsig
-pip install -e .
+uv sync                   # install deps + editable package
+uv run modelsig --help    # run inside the uv environment
 ```
 
 ### Full (all parsers enabled)
 
 ```bash
-pip install "modelsig[full]"
+uv sync --extra full
 # Adds: onnx, transformers, torch, safetensors
+```
+
+### Still using pip?
+
+```bash
+pip install modelsig
+pip install "modelsig[full]"   # all optional parsers
 ```
 
 **Dependency breakdown:**
@@ -436,8 +446,8 @@ All logic is in the `modelsig/` package. Each subdirectory has a single responsi
 ```bash
 git clone https://github.com/joe0731/modelsig
 cd modelsig
-pip install -e ".[dev]"
-pytest tests/ -v
+uv sync                   # installs modelsig + dev deps
+uv run pytest tests/ -v
 ```
 
 Weekly validation against the full model zoo runs via GitHub Actions (`.github/workflows/weekly-validation.yml`).

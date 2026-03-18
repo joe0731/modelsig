@@ -30,23 +30,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
 
       - name: Install modelsig and dependencies
         run: |
-          pip install --upgrade pip
-          # Install modelsig package (registers the `modelsig` CLI entry point)
-          pip install -e ".[dev]"
+          # Install modelsig (registers the `modelsig` CLI entry point)
+          uv sync --extra dev
           # Optional: onnx + transformers for richer analysis
-          pip install onnx transformers accelerate
+          uv pip install onnx transformers accelerate
 
       - name: Run unit tests
         run: |
-          pytest tests/ -v \
+          uv run pytest tests/ -v \
             --ignore=tests/validate_models.py \
             --tb=short \
             2>&1 | tee results/unit_test_output.txt || true
@@ -56,7 +59,7 @@ jobs:
 
       - name: Validate safetensors models
         run: |
-          python tests/validate_models.py \
+          uv run python tests/validate_models.py \
             --group safetensors \
             --workers ${{ github.event.inputs.workers || '4' }} \
             --save results/safetensors_results.json \
@@ -68,7 +71,7 @@ jobs:
 
       - name: Validate ONNX models
         run: |
-          python tests/validate_models.py \
+          uv run python tests/validate_models.py \
             --group onnx \
             --workers ${{ github.event.inputs.workers || '4' }} \
             --save results/onnx_results.json \

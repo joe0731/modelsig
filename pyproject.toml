@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "modelsig"
@@ -58,8 +58,14 @@ Homepage = "https://github.com/joe0731/modelsig"
 Repository = "https://github.com/joe0731/modelsig"
 "Bug Tracker" = "https://github.com/joe0731/modelsig/issues"
 
-[tool.setuptools.packages.find]
-include = ["modelsig*"]
+[tool.hatch.build.targets.wheel]
+packages = ["modelsig"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0",
+    "pytest-cov",
+]
